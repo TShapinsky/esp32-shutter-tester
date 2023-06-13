@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="main.css">
+        <script src="circular_buffer.js"></script>
+        <script src="serial_datalogger.js"></script>
+        <script>
+            const TIMEBASE = .1; // seconds per 100 pixels
+            const SAMPLING_RATE = .125e6; // samples per second
+            const SAMPLES_PER_PIXEL = SAMPLING_RATE*TIMEBASE/100;
+            const CHANNEL_COUNT = 4;
+            const CANVAS_WIDTH = 1000;
+            const CANVAS_HEIGHT = 500;
+            addEventListener("DOMContentLoaded", () => {
+
+                const scope_div = document.getElementById("channel_scope");
+                const trigger_div = document.getElementById("trigger_scope");
+                const connect_button = document.querySelector("#connect");
+                const arm_button = document.getElementById("arm");
+                const timebase_select = document.getElementById("timebase");
+                const status_span = document.getElementById("status");
+                const trigger_data_div = document.getElementById("trigger_data");
+                let datalogger = null;
+                let start = Date.now();
+                connect_button.addEventListener('click', async function () {
+                    let port = await navigator.serial.requestPort({filters: [{usbVendorId: 1155}]});
+                    console.log(port);
+                    await port.open({baudRate: 12e6, bufferSize: 4096});
+                    datalogger = new SerialDatalogger(port, scope_div, trigger_div, arm_button, status_span, trigger_data_div);
+                    datalogger.start();
+
+                    function performance_log() {
+                        let elapsed = Date.now() - start;
+                        let sample_count = datalogger.input_buffer.sample_count;
+                        console.log("Sampling rate: " + (sample_count/elapsed/CHANNEL_COUNT * 1000))
+                        datalogger.input_buffer.sample_count = 0;
+                        start = Date.now();
+                    }
+                    // setInterval(performance_log, 1000);
+                });
+
+                timebase_select.addEventListener('change', () => {
+                    datalogger.set_timebase(parseFloat(timebase_select.value));
+                })
+
+            });
+
+        </script>
+    </head>
+    <body>
+        <button id="connect">
+            Connect
+        </button>
+        <select id="timebase">
+            <option value="0.01">10ms</option>
+            <option value="0.05">50ms</option>
+            <option value="0.1" selected>100ms</option>
+            <option value="0.5">500ms</option>
+            <option value="1">1s</option>
+        </select>
+        <span id="status" style="background: white; padding: 0em 1em;"></span>
+        <div id="channel_scope" style="width: 100%; height: 400px; position: relative">
+
+        </div>
+        <button id="arm">Arm</button> 
+        <div id="trigger_scope" style="width: 100%; height: 400px; position: relative">
+        
+        </div>
+        <div id="trigger_data"></div>
+    </body>
+</html>
